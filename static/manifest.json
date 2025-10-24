@@ -1,0 +1,22 @@
+{
+  "name": "OCR Tool",
+  "short_name": "OCR Tool",
+  "description": "A simple and fast OCR app by Cyber Kid © 2025 for text extraction and offline use.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

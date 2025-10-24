@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ali Text Extraction Tool</title>
+
+  <!-- PWA manifest + icons -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+  <meta name="theme-color" content="#000000">
+
+  <style>
+    /* Simple responsive dark UI - mobile-first */
+    :root {
+      --bg: #000000;
+      --panel: #0b0b0b;
+      --card: #111111;
+      --blue: #007bff;
+      --muted: #9aaec6;
+      --danger: #e04b4b;
+      --success: #2ebd7e;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--blue);font-family:Inter, Arial, sans-serif}
+    .wrap{max-width:900px;margin:0 auto;padding:14px;display:flex;flex-direction:column;min-height:100vh;box-sizing:border-box}
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 0}
+    h1{margin:0;font-size:1.05rem;color:var(--blue);font-weight:700}
+    .uploader{background:var(--panel);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:10px}
+    .file-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    label.file-btn{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--blue);cursor:pointer;font-weight:700}
+    input[type="file"]{display:none}
+    button.action{background:var(--blue);color:#fff;padding:10px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
+    .progress-wrap{display:none;margin-top:6px}
+    .progress-bar{height:10px;background:#0a0a0a;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
+    .progress-inner{height:100%;width:0;background:linear-gradient(90deg,var(--blue),#1a73e8);transition:width .25s}
+    .progress-text{font-size:13px;color:var(--muted);margin-top:6px}
+    #previewList{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .preview-thumb{width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.04)}
+    #output{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+    .card{background:var(--card);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:8px}
+    .one-line{color:var(--blue);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .meta{color:var(--muted);font-size:13px}
+    .open-btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--blue);padding:6px 8px;border-radius:8px;cursor:pointer;font-weight:700}
+    footer{margin-top:auto;padding:10px 0;color:var(--muted);text-align:center;border-top:1px solid rgba(255,255,255,0.02)}
+    /* modal */
+    .modal{display:none;position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:999;align-items:center;justify-content:center;padding:14px}
+    .modal-box{width:100%;max-width:720px;background:#0f0f10;border-radius:12px;padding:12px;box-shadow:0 12px 40px rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.03)}
+    .modal-title{color:var(--blue);font-weight:700}
+    textarea#modalTextarea{width:100%;min-height:220px;background:#0b0b0b;color:var(--blue);border:1px solid rgba(255,255,255,0.04);border-radius:8px;padding:12px;font-size:15px;resize:vertical}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+    .btn{padding:10px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
+    .btn-copy{background:var(--blue);color:#fff}
+    .btn-download{background:var(--success);color:#042}
+    .btn-delete{background:var(--danger);color:#fff}
+    .btn-save{background:#444;color:#fff}
+    @media(max-width:420px){
+      .preview-thumb{width:80px;height:80px}
+      textarea#modalTextarea{min-height:160px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>OCR Tool</h1>
+      <div style="font-size:0.95rem;color:var(--muted)">Hello! Cyber Kid</div>
+    </header>
+
+    <section class="uploader">
+      <div class="file-row">
+        <label class="file-btn" for="fileInput">＋ Upload images</label>
+        <input id="fileInput" type="file" accept="image/*" multiple>
+        <button id="extractBtn" class="action">Extract Text</button>
+        <button id="clearBtn" class="action" style="background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--blue)">Clear</button>
+      </div>
+
+      <div id="previewList"></div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-inner" id="progressInner"></div></div>
+        <div class="progress-text" id="progressText">Extracting... 0%</div>
+      </div>
+    </section>
+
+    <div id="output"></div>
+
+    <footer>Developed by Aliyu Ibrahim Aliyu © 2025 • All rights reserved</footer>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="modal-title">Extracted Text</div>
+        <button id="modalClose" style="background:transparent;border:none;color:var(--blue);font-weight:700;cursor:pointer">✕</button>
+      </div>
+      <div style="margin-top:8px">
+        <textarea id="modalTextarea" placeholder="Edit extracted text..."></textarea>
+        <div class="modal-actions">
+          <button class="btn btn-save" id="saveEditBtn">Save</button>
+          <button class="btn btn-copy" id="copyBtn">Copy</button>
+          <button class="btn btn-download" id="downloadBtn">Download</button>
+          <button class="btn btn-delete" id="deleteBtn">Delete Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Client-side JS (keeps things simple & self-contained)
+
+    const fileInput = document.getElementById('fileInput');
+    const previewList = document.getElementById('previewList');
+    const extractBtn = document.getElementById('extractBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressInner = document.getElementById('progressInner');
+    const progressText = document.getElementById('progressText');
+    const output = document.getElementById('output');
+
+    // Modal and editing
+    const modal = document.getElementById('modal');
+    const modalClose = document.getElementById('modalClose');
+    const modalTextarea = document.getElementById('modalTextarea');
+    const saveEditBtn = document.getElementById('saveEditBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let lastResults = []; // {id, text, duration}
+    let currentId = null;
+
+    // localStorage key for saved edits
+    const LS_KEY = 'aliocr_edits_v1';
+
+    function loadEdits() {
+      try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+      catch { return {}; }
+    }
+    function saveEdits(map) { localStorage.setItem(LS_KEY, JSON.stringify(map)); }
+
+    // Preview selected images
+    fileInput.addEventListener('change', (e) => {
+      previewList.innerHTML = '';
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      files.forEach(file => {
+        const url = URL.createObjectURL(file);
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'preview-thumb';
+        img.title = file.name;
+        previewList.appendChild(img);
+      });
+    });
+
+    // Clear previews and state
+    clearBtn.addEventListener('click', () => {
+      fileInput.value = '';
+      previewList.innerHTML = '';
+      output.innerHTML = '';
+      lastResults = [];
+      localStorage.removeItem(LS_KEY); // optional: remove saved edits
+    });
+
+    // Extract button => send files to server
+    extractBtn.addEventListener('click', async () => {
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) return alert('Please select at least one image.');
+
+      // prepare formdata
+      const fd = new FormData();
+      files.forEach(f => fd.append('image', f));
+
+      // show fake progress while awaiting response
+      progressWrap.style.display = 'block';
+      progressInner.style.width = '6%';
+      progressText.textContent = 'Extracting... 6%';
+      let fake = 6;
+      const iv = setInterval(() => {
+        fake = Math.min(fake + Math.floor(Math.random()*12)+4, 90);
+        progressInner.style.width = fake + '%';
+        progressText.textContent = `Extracting... ${fake}%`;
+      }, 300);
+
+      try {
+        const res = await fetch('/extract', { method: 'POST', body: fd });
+        const data = await res.json();
+        clearInterval(iv);
+        progressInner.style.width = '100%';
+        progressText.textContent = 'Completed 100% ✅';
+        setTimeout(()=> { progressWrap.style.display = 'none'; progressInner.style.width = '0%'; }, 900);
+
+        if (data.error) { alert('Error: ' + data.error); return; }
+
+        // save results and render list
+        lastResults = (data || []).map(it => ({ id: it.id, text: it.text, duration: it.duration }));
+        renderResults();
+        // clear input so same file can be re-selected later
+        fileInput.value = '';
+        previewList.innerHTML = '';
+      } catch (err) {
+        clearInterval(iv);
+        progressWrap.style.display = 'none';
+        alert('Upload failed: ' + (err.message || err));
+      }
+    });
+
+    function renderResults(){
+      output.innerHTML = '';
+      const edits = loadEdits();
+      lastResults.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const oneLine = document.createElement('div');
+        oneLine.className = 'one-line';
+        const firstLine = (edits[item.id] !== undefined ? edits[item.id] : (item.text || '')).split('\\n')[0] || '[No text found]';
+        oneLine.innerText = firstLine;
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerText = `⏱ Extracted in ${item.duration}s`;
+
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+
+        const openBtn = document.createElement('button');
+        openBtn.className = 'open-btn';
+        openBtn.innerText = 'Open';
+        openBtn.onclick = () => openModal(item.id, item.text);
+
+        row.appendChild(oneLine);
+        row.appendChild(openBtn);
+
+        card.appendChild(row);
+        card.appendChild(meta);
+        output.appendChild(card);
+      });
+    }
+
+    // Modal open: load either saved edit or original text
+    function openModal(id, originalText){
+      currentId = id;
+      const edits = loadEdits();
+      modalTextarea.value = edits[id] !== undefined ? edits[id] : (originalText || "");
+      modal.style.display = 'flex';
+      setTimeout(()=> {
+        modalTextarea.focus();
+        modalTextarea.selectionStart = modalTextarea.selectionEnd = modalTextarea.value.length;
+      }, 200);
+    }
+
+    modalClose.addEventListener('click', ()=> { modal.style.display = 'none'; currentId = null; });
+
+    // Save edits locally
+    saveEditBtn.addEventListener('click', ()=> {
+      if (!currentId) return alert('No item open');
+      const edits = loadEdits();
+      edits[currentId] = modalTextarea.value;
+      saveEdits(edits);
+      alert('Saved locally.');
+      renderResults();
+    });
+
+    // Copy
+    copyBtn.addEventListener('click', ()=> {
+      navigator.clipboard.writeText(modalTextarea.value || '').then(()=> alert('Copied to clipboard!'), ()=> alert('Copy failed'));
+    });
+
+    // Download via server endpoint (so it uses same stored text)
+    downloadBtn.addEventListener('click', ()=> {
+      if (!currentId) return alert('No item open');
+      // open download link
+      window.open(`/download/${currentId}`, '_blank');
+    });
+
+    // Delete now (server + local)
+    deleteBtn.addEventListener('click', async ()=> {
+      if (!currentId) return;
+      const ok = confirm('Are you sure you want to delete this? This cannot be undone.');
+      if (!ok) return;
+      const res = await fetch(`/delete/${currentId}`, { method: 'DELETE' });
+      const j = await res.json();
+      if (j.message) {
+        const edits = loadEdits();
+        delete edits[currentId];
+        saveEdits(edits);
+        // remove from lastResults and re-render
+        lastResults = lastResults.filter(r => r.id !== currentId);
+        renderResults();
+        modal.style.display = 'none';
+        alert('Deleted successfully.');
+      } else {
+        alert('Delete failed: ' + (j.error || 'unknown'));
+      }
+    });
+
+    // register service worker for PWA (if exists)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
+        .then(()=> console.log('SW registered'))
+        .catch(e=> console.log('SW register failed', e));
+    }
+
+    // close modal on background click
+    document.getElementById('modal').addEventListener('click', (ev)=> {
+      if (ev.target === document.getElementById('modal')) { modal.style.display = 'none'; currentId = null; }
+    });
+  </script>
+</body>
+</html>
